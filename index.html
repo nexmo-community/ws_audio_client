@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>WS Audio PTT</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+   <style>
+       body{
+           background: #646970;
+           text-align: center;
+       }
+
+       input {
+           width: 60%;
+           font-size:24px;
+           font-family:monospace;
+       }
+
+       .button {
+           width: 400px;
+		   height: 100px;
+           background-color: #d0d6dd; 
+           border: 0px;
+           color: #646970;
+           text-align: center;
+           text-decoration: none;
+           margin-top: 10px;
+           font-size: 20px;
+           font-family:monospace;
+       }
+       h1{
+		   color: #f4f4f4;
+           font-size:30px;
+           font-family:monospace;
+       }
+       h3{
+		   color: #f4f4f4;
+           font-size:24px;
+           font-family:monospace;
+       }
+       </style>
+  </head>
+  <body>
+    <h1>WS Audio PTT</h1>
+	<h3>Connection:<span id='conn'>⚪️</span> Tx:<span id='tx'>⚪️</span></h3>
+  <input type="text" id="wsurl", placeholder="Websocket URL" style="width:400px"><br>
+	<button class="button" id="con_btn", onclick='connect()' style="height:50px">Connect</button>
+	<br>
+	<button  class="button" id="ptt_btn" style="height:200px">Talk</button>   
+  <script>
+    var wsurl;
+	  var ptt_btn=document.getElementById("ptt_btn");
+	  var con_btn=document.getElementById("con_btn");
+    var ptt=false;
+	  var status_off = '⚪️';
+	  var status_on = '🔵';
+	  var status_tx = '🔴';
+      var AudioContext = window.AudioContext || window.webkitAudioContext
+      var context = new AudioContext()
+	  var time;
+	  var ws;
+	  
+	  ptt_btn.disabled = true; 
+	  ptt_btn.onmousedown = function(e){
+	  	ptt=true;
+		document.getElementById("tx").innerHTML=status_tx;
+		if(ws.readyState == ws.OPEN) {
+			var evt = {"event": "ptt_on"};
+			ws.send(JSON.stringify(evt));
+        }
+	  } 
+	  ptt_btn.onmouseup = function(e){
+	  	ptt=false;
+		document.getElementById("tx").innerHTML=status_off;
+		if(ws.readyState == ws.OPEN) {
+			var evt = {"event": "ptt_off"};
+			ws.send(JSON.stringify(evt));
+        }
+	  }
+					
+      
+	  
+	  function connect(){
+      wsurl = document.getElementById("wsurl").value;
+      console.log(wsurl);
+		  ws = new WebSocket(wsurl)
+	      ws.binaryType = 'arraybuffer';
+		  time = 0
+		  con_btn.innerText = 'Disconnect';
+		  con_btn.onclick = function () { ws.close()};
+		  ptt_btn.disabled = false; 
+		
+		  ws.onopen = function(){
+			  document.getElementById("conn").innerHTML=status_on;
+  			var evt = {"event": "connect", "id" : "test"};
+			console.log(JSON.stringify(evt));
+  			ws.send(JSON.stringify(evt));
+			console.log('connected');
+			
+		  }
+		  ws.onclose = function(){
+			   document.getElementById("conn").innerHTML=status_off;
+				console.log('disconnected');
+				con_btn.innerText = 'Connect';
+				con_btn.onclick = function () { connect()};
+				ptt_btn.disabled = true; 
+		  }
+		  
+	      ws.onmessage = function(event){
+	        time = Math.max(context.currentTime, time)
+	        var input = new Int16Array(event.data)
+	        if(input.length) {
+	          var buffer = context.createBuffer(1, input.length, 16000)
+	          var data = buffer.getChannelData(0)
+	          for (var i = 0; i < data.length; i++) {
+	            data[i] = input[i] / 32767
+	          }
+	          var source = context.createBufferSource()
+	          source.buffer = buffer
+	          source.connect(context.destination)
+	          source.start(time += buffer.duration)
+	        }
+	      }
+	 }
+	 
+
+      navigator.mediaDevices.getUserMedia({
+        video: false,
+        audio: true
+      })
+	  .then( stream => {
+        var source = context.createMediaStreamSource(stream)
+        var processor = context.createScriptProcessor(1024, 1, 1)
+        var downsampled = new Int16Array(2048)
+        var downsample_offset = 0
+
+        function process_samples(){
+          while(downsample_offset > 320) {
+            var output = downsampled.slice(0, 320)
+            downsampled.copyWithin(0, 320)
+            downsample_offset -= 320
+			if(ptt == true) {
+              ws.send(output.buffer)
+            }
+          }
+        }
+        var sampleRatio = context.sampleRate / 16000
+        processor.onaudioprocess = (audioProcessingEvent) => {
+          var inputBuffer = audioProcessingEvent.inputBuffer
+          var outputBuffer = audioProcessingEvent.outputBuffer
+          var inputData = inputBuffer.getChannelData(0)
+          var outputData = outputBuffer.getChannelData(0)
+          for (var i = 0; i < inputData.length; i += sampleRatio) {
+            var sidx = Math.floor(i)
+            var tidx = Math.floor(i/sampleRatio)
+            downsampled[downsample_offset + tidx] = inputData[sidx] * 32767
+          }
+          downsample_offset += ~~(inputData.length/sampleRatio)
+          if(downsample_offset > 320) {
+            process_samples()
+          }
+          for (var sample = 0; sample < inputBuffer.length; sample++) {
+            // Silence the output
+            outputData[sample] = 0
+          }
+        }
+        source.connect(processor)
+        processor.connect(context.destination)
+      })
+    </script>
+  </body>
+</html>
