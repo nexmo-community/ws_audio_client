@@ -11,7 +11,7 @@ You can host it anywhere eg localhost or you can use the hosted version at http:
 If you enter `wss://echo.websocket.org` in the URL box and click connect you will connect to demo websocket echo server, use the Talk button like a press-to-talk on a walkie talkie to send the audio from your microphone, you should hear your own voice back.
 
 ## Limitations
-Currently it only supports 16khz PCM audio rate (TODO 8Khz)
-There is no support for sending the initial JSON message on connect (TODO)
-There is no support for DTMGF events (TODO)
+* Currently it only supports 16khz PCM audio rate (TODO 8Khz)
+* ~There is no support for sending the initial JSON message on connect (TODO)~
+* There is no support for DTMF events (TODO)
 
