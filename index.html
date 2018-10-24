@@ -11,8 +11,8 @@
        }
 
        input {
-           width: 60%;
-           font-size:24px;
+           width: 400px;
+           font-size:16px;
            font-family:monospace;
        }
 
@@ -43,12 +43,15 @@
   <body>
     <h1>WS Audio PTT</h1>
 	<h3>Connection:<span id='conn'>⚪️</span> Tx:<span id='tx'>⚪️</span></h3>
-  <input type="text" id="wsurl", placeholder="Websocket URL" style="width:400px"><br>
+  <input type="text" id="wsurl", placeholder="Websocket URL" style="width:400px"><br><br>
+  <textarea placeholder="JSON Header Data" cols="52" rows="8" id="headerdata"></textarea>
+  <br>
 	<button class="button" id="con_btn", onclick='connect()' style="height:50px">Connect</button>
 	<br>
 	<button  class="button" id="ptt_btn" style="height:200px">Talk</button>   
   <script>
     var wsurl;
+    var headerdata;
 	  var ptt_btn=document.getElementById("ptt_btn");
 	  var con_btn=document.getElementById("con_btn");
     var ptt=false;
@@ -62,26 +65,26 @@
 	  
 	  ptt_btn.disabled = true; 
 	  ptt_btn.onmousedown = function(e){
-	  	ptt=true;
+	  ptt=true;
 		document.getElementById("tx").innerHTML=status_tx;
-		if(ws.readyState == ws.OPEN) {
-			var evt = {"event": "ptt_on"};
-			ws.send(JSON.stringify(evt));
-        }
 	  } 
 	  ptt_btn.onmouseup = function(e){
 	  	ptt=false;
 		document.getElementById("tx").innerHTML=status_off;
-		if(ws.readyState == ws.OPEN) {
-			var evt = {"event": "ptt_off"};
-			ws.send(JSON.stringify(evt));
-        }
 	  }
 					
       
-	  
+    function extend(obj, src) {
+    	    for (var key in src) {
+    	        if (src.hasOwnProperty(key)) obj[key] = src[key];
+    	    }
+    	    return obj;
+    	}
+    
 	  function connect(){
       wsurl = document.getElementById("wsurl").value;
+      headerdata = document.getElementById("headerdata").value;
+
       console.log(wsurl);
 		  ws = new WebSocket(wsurl)
 	      ws.binaryType = 'arraybuffer';
@@ -92,10 +95,16 @@
 		
 		  ws.onopen = function(){
 			  document.getElementById("conn").innerHTML=status_on;
-  			var evt = {"event": "connect", "id" : "test"};
-			console.log(JSON.stringify(evt));
-  			ws.send(JSON.stringify(evt));
-			console.log('connected');
+  			var message = {"event": "websocket:connected", "content-type" : "audio/l16;rate=16000"};
+        if (headerdata.length != 0){
+          var headers = JSON.parse(headerdata);
+          var evt = extend(message, headers)
+        } else{
+          var evt = message
+        }
+  		  ws.send(JSON.stringify(evt));
+			  console.log("Sent: "+JSON.stringify(evt));
+			  console.log('connected');
 			
 		  }
 		  ws.onclose = function(){
@@ -107,20 +116,24 @@
 		  }
 		  
 	      ws.onmessage = function(event){
-	        time = Math.max(context.currentTime, time)
-	        var input = new Int16Array(event.data)
-	        if(input.length) {
-	          var buffer = context.createBuffer(1, input.length, 16000)
-	          var data = buffer.getChannelData(0)
-	          for (var i = 0; i < data.length; i++) {
-	            data[i] = input[i] / 32767
+          if(event.data instanceof ArrayBuffer) {
+	          time = Math.max(context.currentTime, time)
+	          var input = new Int16Array(event.data)
+	            if(input.length) {
+	              var buffer = context.createBuffer(1, input.length, 16000)
+	              var data = buffer.getChannelData(0)
+	              for (var i = 0; i < data.length; i++) {
+	                data[i] = input[i] / 32767
+	              }
+	              var source = context.createBufferSource()
+	              source.buffer = buffer
+	              source.connect(context.destination)
+	              source.start(time += buffer.duration)
+	            }
+	          } else {
+	            console.log("Recieved: "+ event.data);
 	          }
-	          var source = context.createBufferSource()
-	          source.buffer = buffer
-	          source.connect(context.destination)
-	          source.start(time += buffer.duration)
-	        }
-	      }
+          }  
 	 }
 	 
 
