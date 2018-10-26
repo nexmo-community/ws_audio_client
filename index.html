@@ -86,16 +86,16 @@
       headerdata = document.getElementById("headerdata").value;
 
       console.log(wsurl);
-		  ws = new WebSocket(wsurl)
-	      ws.binaryType = 'arraybuffer';
-		  time = 0
-		  con_btn.innerText = 'Disconnect';
-		  con_btn.onclick = function () { ws.close()};
-		  ptt_btn.disabled = false; 
+	  ws = new WebSocket(wsurl, "WSBRIDGE")
+	  ws.binaryType = 'arraybuffer';
+	  time = 0
+	  con_btn.innerText = 'Disconnect';
+	  con_btn.onclick = function () { ws.close()};
+	  ptt_btn.disabled = false; 
 		
-		  ws.onopen = function(){
-			  document.getElementById("conn").innerHTML=status_on;
-  			var message = {"event": "websocket:connected", "content-type" : "audio/l16;rate=16000"};
+	 ws.onopen = function(){
+		  document.getElementById("conn").innerHTML=status_on;
+  		var message = {"event": "websocket:connected", "content-type" : "audio/l16;rate=16000"};
         if (headerdata.length != 0){
           var headers = JSON.parse(headerdata);
           var evt = extend(message, headers)
